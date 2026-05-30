@@ -1,0 +1,146 @@
+.map-page {
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.photo-map {
+  height: 100%;
+  width: 100%;
+}
+
+.map-toolbar {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  display: flex;
+  justify-content: space-between;
+  left: 50%;
+  padding: 12px 14px 12px 18px;
+  position: absolute;
+  top: 16px;
+  transform: translateX(-50%);
+  width: min(680px, calc(100% - 32px));
+  z-index: 1000;
+}
+
+.map-toolbar strong,
+.map-toolbar span {
+  display: block;
+}
+
+.map-toolbar strong {
+  color: #172554;
+  font-size: 17px;
+}
+
+.map-toolbar span,
+.muted {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.map-toolbar nav,
+.comments form {
+  display: flex;
+  gap: 8px;
+}
+
+.map-toolbar button,
+.comments button {
+  background: #2563eb;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.map-toolbar .secondary {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.map-error {
+  background: #fee2e2;
+  border-radius: 8px;
+  color: #991b1b;
+  left: 50%;
+  padding: 9px 14px;
+  position: absolute;
+  top: 84px;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+
+.photo-popup img {
+  border-radius: 8px 8px 0 0;
+  display: block;
+  height: 150px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.photo-popup__body {
+  padding: 10px 2px 2px;
+}
+
+.photo-popup h2,
+.photo-popup h3 {
+  color: #0f172a;
+  margin: 0;
+}
+
+.photo-popup h2 {
+  font-size: 16px;
+}
+
+.photo-popup h3 {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.photo-popup__coordinates,
+.photo-popup__ai {
+  color: #64748b;
+  font-size: 12px;
+  margin: 5px 0;
+}
+
+.comments {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 9px;
+  padding-top: 9px;
+}
+
+.comment {
+  background: #f1f5f9;
+  border-radius: 6px;
+  color: #334155;
+  font-size: 12px;
+  margin: 5px 0;
+  padding: 6px 8px;
+}
+
+.comments input {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  min-width: 0;
+  padding: 7px;
+  width: 100%;
+}
+
+.comments button {
+  padding: 7px 10px;
+}
+
+.comments button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 12px;
+}

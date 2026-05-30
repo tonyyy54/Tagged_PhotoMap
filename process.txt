@@ -1,0 +1,150 @@
+Phase 1 - Architecture Design
+    
+    React Frontend
+        |
+        | REST API
+        v
+    FastAPI Backend
+        |
+        +----------------+
+        |                |
+        v                v
+    PostgreSQL       S3 / MinIO
+    (PostGIS)        (Images)
+
+        |
+        v
+    OpenAI Vision API
+
+    1. React is in charge of UI
+    2. FastAPI is in charge of business logic
+    3. PostgreSQL is used to store the Data
+    4. S3/MinIO is used to store the photos
+    5. OpenAI is in charge of creating the discription
+
+Phase 2 - Database Design
+
+User
+----
+*id
+email
+password_hash
+created_at
+------------------------------------
+Photo
+-----
+id
+user_id
+image_url
+
+latitude
+longitude
+
+description
+ai_description
+
+created_at
+------------------------------------
+Comment
+-------
+id
+photo_id
+user_id
+
+content
+created_at
+
+Relation of the Database
+    User 1 ---- N Photo
+    User 1 ---- N Comment
+    Photo 1 ---- N Comment
+
+    foreign key:
+
+        photos.user_id -> users.id
+        comments.user_id -> users.id
+        comments.photo_id -> photos.id
+
+ Phase 3 - Backend
+
+ Step 1 Login/Register(FastAPI)
+    
+    POST /auth/register
+
+    POST /auth/login
+
+Step 2 Upload Photo
+
+    POST /photos
+
+Step 3 AI Description
+
+Step 4 Get Photos
+
+    GET /photos
+
+Step 5 Comments
+
+    POST /photos/{id}/comments
+
+    GET /photos/{id}/comments
+
+Phase 4 - Frontend
+
+    Login Page(React) /login
+    Upload Page  /upload
+    Map Page
+
+1. 创建 React + Vite + TypeScript 项目
+2. 安装 react-router-dom
+3. 做 LoginPage
+4. 登录成功后保存 token 到 localStorage
+5. 做 UploadPage，调用 POST /photos
+6. 做 MapPage，调用 GET /photos
+7. 用 Leaflet 显示 marker
+8. 点击 marker 显示图片、AI description、comments
+
+LoginPage
+↓
+RegisterPage
+↓
+UploadPage
+↓
+MapPage (Leaflet)
+↓
+Photo Popup + Comments
+
+swagger手填坐标
+→ 如果未填写，读取图片 EXIF GPS
+→ 如果图片也没有 GPS，返回 422 并提示手动填写
+
+frontend 在 UploadPage.tsx (line 15) 中使用 exifr。选择图片后会自动读取 GPS 并填入坐标框。没有 GPS 时仍可手动填写。
+
+新增 ProtectedRoute.tsx (line 4)。
+在 App.tsx (line 26) 中，以下页面现在要求登录：
+/upload
+/map
+
+没有 token 或 token 已过期时，会自动跳转：/login
+
+新增 auth.ts (line 5) 检查 JWT 过期时间。
+在 client.ts (line 20) 中，如果受保护 API 返回 401，会自动清除 token 并返回登录页。
+验证结果
+
+Phase 5 - Large Dataset Optimization
+
+Phase 6 - Deployment
+
+
+MVP
+1. FastAPI project
+2. PostgreSQL
+3. JWT Auth
+4. Upload image
+5. Extract GPS
+6. Save photo
+7. Leaflet map
+8. Display markers
+9. Comments
+10. AI description
+11. Docker
