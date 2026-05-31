@@ -1,192 +1,189 @@
 # Tagged Pictures Map
 
-This repository contains a working FastAPI backend MVP for a map-based photo
-application. Users can register, log in, upload a geotagged image, query visible
-map photos, and add comments.
+Tagged Pictures Map is a full-stack MVP for uploading geotagged photos and
+displaying them on an interactive map. Users can register, log in, upload an
+image, extract EXIF GPS coordinates, browse photos in the visible map area,
+generate AI descriptions, add comments, and delete their own photos.
 
-## Production Plan
+## Current Technology Stack
 
-### Technology choices
+The following technologies are implemented in the repository today.
 
-| Area | Choice | Reason |
+| Area | Technology | Purpose |
 | --- | --- | --- |
-| Frontend | React, TypeScript, Vite, Tailwind CSS | Fast UI iteration with typed API calls |
-| Backend | FastAPI, SQLModel, Alembic | Typed REST API and migrations |
-| Database | PostgreSQL with PostGIS | Spatial indexes and bounding-box queries |
-| Image storage | S3 in cloud, MinIO locally | Durable object storage with presigned uploads |
-| Authentication | Short-lived JWT access tokens, refresh token cookie | Stateless API authorization with revocation support |
-| Map | MapLibre GL with marker clustering | Good performance and no mandatory vendor lock-in |
-| AI | OpenAI vision model through an async worker | Generate captions without blocking upload |
-| Deployment | Docker Compose locally; managed PostgreSQL, S3, container platform, CDN in cloud | Simple local setup and scalable production services |
+| Frontend | React 19, TypeScript | Typed UI components |
+| Build tooling | Vite 8 | Development server and production build |
+| Routing | React Router DOM | Login, registration, upload, and map routes |
+| HTTP client | Axios | REST API requests and JWT injection |
+| Map | Leaflet, React Leaflet, OpenStreetMap tiles | Interactive map, markers, and popups |
+| Browser image metadata | exifr | Extract GPS coordinates from EXIF metadata |
+| Styling | CSS | Page and map popup styles |
+| Backend | FastAPI, Uvicorn | REST API and local static file serving |
+| ORM | SQLModel | Database models and queries |
+| Database | SQLite | Local MVP persistence |
+| Image processing | Pillow | Server-side EXIF GPS extraction |
+| Image storage | Local `backend/uploads` directory | Local MVP image storage |
+| Authentication | JWT bearer tokens, PBKDF2-HMAC-SHA256 | API authorization and password hashing |
+| AI descriptions | OpenAI Responses API with `gpt-5.4-mini` | Generate a short caption after upload |
+| Backend tests | pytest, HTTPX | API and service tests |
+| Frontend checks | ESLint, TypeScript | Static analysis and type checking |
 
-### Architecture
+## MVP Architecture
 
 ```text
 React client
   |-- JWT REST calls ----------------------> FastAPI API
-  |                                           |-- PostgreSQL + PostGIS
-  |-- presigned upload ---------------------> |-- S3 / MinIO
-                                              |-- job queue --> AI caption worker
+  |                                           |-- SQLite
+  |-- multipart photo upload -------------->  |-- backend/uploads
+                                              |-- OpenAI Responses API
 
-CDN <----------------------------------------- S3 / MinIO
+OpenStreetMap tiles ------------------------> Leaflet map
 ```
 
-The API owns users, photo metadata, comments, permissions, and storage
-credentials. Image binaries live in object storage rather than the database.
-The MVP stores uploads locally so it can run without cloud credentials.
+The API stores users, photo metadata, comments, permissions, and AI
+descriptions. Uploaded image files are stored locally for development.
 
-### Core data models
+## Implemented Features
+
+- Register and log in with JWT authentication.
+- Upload JPEG, PNG, or WebP images.
+- Extract GPS coordinates in the browser with `exifr`.
+- Fall back to server-side EXIF extraction with Pillow.
+- Enter coordinates manually when an image has no GPS metadata.
+- Generate a concise AI photo description when an OpenAI API key is configured.
+- Show an explicit AI quota message when the OpenAI API quota is insufficient.
+- Query only photos inside the current map viewport.
+- Display photo markers, image popups, AI descriptions, and comments.
+- Allow authenticated users to delete their own photos and associated comments.
+
+## Core Data Models
 
 - `User`: `id`, `email`, `username`, `password_hash`, `created_at`
 - `Photo`: `id`, `user_id`, `image_url`, `latitude`, `longitude`,
   `description`, `ai_description`, `created_at`
 - `Comment`: `id`, `photo_id`, `user_id`, `content`, `created_at`
 
-For production, add a PostGIS `geography(Point, 4326)` column and a GiST index.
-Store refresh-token sessions separately so users can log out individual devices.
+## Run Locally
 
-### Upload-to-map data flow
-
-1. The user registers or logs in and receives an access token.
-2. In production, the client requests a presigned object-storage URL.
-3. The client uploads the file directly to S3 or MinIO.
-4. The client sends the object key and coordinates to the API.
-5. The API validates the metadata, stores the `Photo`, and enqueues AI captioning.
-6. The map requests photos inside its current bounding box and zoom level.
-7. The API uses a PostGIS spatial index and returns markers or clusters.
-8. Clicking a marker loads the image URL and its comments.
-
-The included MVP combines steps 2-4 in `POST /photos/upload` and writes the
-uploaded file to `backend/uploads`.
-
-### Image storage trade-offs
-
-Storing image bytes in PostgreSQL makes transactions simple, but increases
-database size, backup time, and serving cost. Files on the application server
-are convenient for a demo but do not work well across multiple API replicas.
-Object storage is the production choice: it is durable, cheap, CDN-friendly,
-and supports direct browser uploads.
-
-### Performance for 10k+ photos
-
-- Query only the visible map bounding box, not the whole table.
-- Add a PostGIS GiST index and return compact marker DTOs.
-- Cluster markers by zoom level with MapLibre or server-side geohash buckets.
-- Paginate or cap results and fetch photo details only after marker clicks.
-- Serve thumbnails through a CDN; generate multiple image sizes asynchronously.
-- Cache popular map tiles or bounding-box responses when traffic grows.
-
-### Deployment
-
-For local production-like development, use Docker Compose with frontend,
-FastAPI, PostgreSQL/PostGIS, and MinIO services. In cloud deployment, use a
-managed PostgreSQL instance, S3-compatible storage, a CDN, secret management,
-container replicas behind a load balancer, and CI checks for tests and
-migrations.
-
-### Realistic implementation estimate
-
-| Work item | Estimate |
-| --- | --- |
-| Repository setup, Docker, CI skeleton | 4-6h |
-| Database schema, migrations, storage integration | 6-8h |
-| Authentication and authorization | 4-6h |
-| Photo upload, EXIF GPS extraction, thumbnail worker | 6-10h |
-| Frontend login, upload, image details, comments | 8-12h |
-| Map integration, viewport query, clustering | 6-10h |
-| AI caption worker and retry handling | 3-5h |
-| Tests, observability, security pass | 8-12h |
-| Deployment and runbook | 4-6h |
-
-A four-hour exercise can reasonably deliver the included backend MVP and a
-minimal frontend, but not the complete production hardening described above.
-
-## Backend MVP
-
-### Run locally
+### Backend
 
 ```powershell
 cd backend
-python -m venv .venv (only the firt time to create the env)
+
+# First-time setup
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt (only the firt time to download the requirements)
-python -m uvicorn main:app --reload (start the AI below firstly)
-```
+python -m pip install -r requirements.txt
 
-The API documentation is available at `http://127.0.0.1:8000/docs`.
-SQLite and local file uploads are used by default.
-
-
-### Enable AI photo descriptions
-
-Copy `backend/.env.example` to `backend/.env`, then set `OPENAI_API_KEY`.
-Uploaded photos will receive a short AI-generated description when the key is
-configured. Uploads still succeed if the AI service is unavailable.
-
-```powershell
-Copy-Item .env.example .env
-# Edit .env and replace OPENAI_API_KEY with your key.
+# Start the API
 python -m uvicorn main:app --reload
 ```
 
-The default vision-capable model is `gpt-5.4-mini`. Override `OPENAI_MODEL` in
-`.env` when needed.
+The API documentation is available at `http://127.0.0.1:8000/docs`.
 
-### API endpoints
+### AI Photo Descriptions
+
+Create a local environment file and add an OpenAI API key:
+
+```powershell
+cd backend
+Copy-Item .env.example .env
+```
+
+Edit `backend/.env`:
+
+```env
+SECRET_KEY=replace-with-a-long-random-value
+OPENAI_API_KEY=sk-your-openai-api-key
+OPENAI_MODEL=gpt-5.4-mini
+```
+
+`backend/.env` is ignored by Git. Do not commit real API keys. If the AI
+service is unavailable, the photo upload still succeeds.
+
+### Frontend
+
+```powershell
+cd frontend
+
+# First-time setup
+npm install
+
+# Start the development server
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+## API Endpoints
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/health` | Health check |
 | `POST` | `/auth/register` | Register a user |
-| `POST` | `/auth/login` | Get a JWT |
-| `POST` | `/photos/upload` | Upload a local image and coordinates |
+| `POST` | `/auth/login` | Get a JWT access token |
+| `POST` | `/photos/upload` | Upload an image and coordinates |
 | `POST` | `/photos` | Register an existing image URL |
 | `GET` | `/photos` | Query markers, optionally by bounding box |
+| `DELETE` | `/photos/{photo_id}` | Delete the current user's photo and comments |
 | `POST` | `/photos/{photo_id}/comments` | Add a comment |
 | `GET` | `/photos/{photo_id}/comments` | List comments |
 
-### Test the backend
+## Verification
+
+Run the backend tests:
 
 ```powershell
 cd backend
 python -m pytest -q
 ```
 
-The example in `backend/tests/test_api.py` exercises the complete backend flow:
-register, log in, upload an image, query the map viewport, add a comment, and
-read comments.
-
-
-### Test the frontend
-
-1. Go to the frontend directory
+Check the frontend:
 
 ```powershell
 cd frontend
+npm run lint
+npm run build
 ```
 
-2. Install dependencies
+On Windows systems that block PowerShell scripts, use `npm.cmd`:
 
 ```powershell
-npm install
+npm.cmd run lint
+npm.cmd run build
 ```
 
-3. Start the development server
+## Production Plan
 
-```powershell
-npm run dev
-```
+The following technologies are recommended for production but are not yet
+implemented in this repository.
 
-4. Open the application
+| Area | Recommended technology | Reason |
+| --- | --- | --- |
+| Database | PostgreSQL with PostGIS | Spatial indexes and efficient bounding-box queries |
+| Database migrations | Alembic | Versioned schema changes |
+| Image storage | S3-compatible storage or MinIO | Durable object storage and direct uploads |
+| Image delivery | CDN and generated thumbnails | Faster image loading and lower API traffic |
+| Map scaling | Marker clustering or server-side geohash buckets | Avoid rendering thousands of individual markers |
+| AI processing | Background job queue and worker | Keep uploads responsive while captions are generated |
+| Authentication | Short-lived access tokens and refresh-token sessions | Better session revocation |
+| Deployment | Docker Compose locally and managed cloud services | Repeatable local setup and scalable production hosting |
 
-```text
-http://localhost:5173
-```
+### Image Storage Trade-offs
 
-5. Test the main features
+Storing image bytes in PostgreSQL makes transactions straightforward, but
+increases database size, backup time, and serving cost. Storing files on the
+application server is convenient for this MVP, but does not work well across
+multiple API replicas. Production deployments should keep metadata in the
+database and store image files in S3-compatible object storage behind a CDN.
 
-- Register a new user
-- Login with existing credentials
-- Upload a geotagged photo
-- View photos on the map
-```
+### Performance for 10k+ Photos
+
+- Query only the visible map bounding box instead of loading every photo.
+- Add a PostGIS `geography(Point, 4326)` column and a GiST spatial index.
+- Return lightweight marker DTOs and fetch full details after marker clicks.
+- Cluster markers by zoom level with Leaflet clustering or server-side buckets.
+- Cap results and paginate when a viewport contains too many photos.
+- Generate small WebP thumbnails asynchronously and serve them through a CDN.
+- Debounce viewport requests and cancel stale requests when the map moves.
+- Cache popular bounding-box responses when traffic grows.
