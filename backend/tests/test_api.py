@@ -2,6 +2,7 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import httpx
 from PIL import Image
 from PIL.TiffImagePlugin import IFDRational
 from sqlalchemy.pool import StaticPool
@@ -11,6 +12,10 @@ from app.core.database import get_session
 from app.core.config import settings
 from main import app
 from app.services.exif_service import _to_degrees, extract_gps_coordinates
+from app.services.ai_description_service import (
+    INSUFFICIENT_QUOTA_DESCRIPTION,
+    _extract_error_description,
+)
 
 
 engine = create_engine(
@@ -175,3 +180,128 @@ def test_upload_uses_exif_coordinates_when_form_coordinates_are_missing(monkeypa
     assert photo["latitude"] == 48.8566
     assert photo["longitude"] == 2.3522
     (settings.UPLOAD_DIR / Path(photo["image_url"]).name).unlink()
+
+
+def test_upload_stores_generated_ai_description(monkeypatch):
+    async def generate_description(_, __):
+        return "A tower rises above a city skyline."
+
+    monkeypatch.setattr(
+        "app.routers.photos.generate_ai_description",
+        generate_description,
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/auth/register",
+            json={
+                "email": "ai@example.com",
+                "username": "ai-user",
+                "password": "correct-horse",
+            },
+        )
+        login = client.post(
+            "/auth/login",
+            json={"email": "ai@example.com", "password": "correct-horse"},
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        upload = client.post(
+            "/photos/upload",
+            headers=headers,
+            data={"latitude": "48.8584", "longitude": "2.2945"},
+            files={"image": ("tower.jpg", b"fake-jpeg-for-ai-test", "image/jpeg")},
+        )
+
+    assert upload.status_code == 200
+    photo = upload.json()
+    assert photo["ai_description"] == "A tower rises above a city skyline."
+    (settings.UPLOAD_DIR / Path(photo["image_url"]).name).unlink()
+
+
+def test_ai_description_reports_insufficient_openai_quota():
+    response = httpx.Response(
+        status_code=429,
+        json={"error": {"code": "insufficient_quota"}},
+    )
+
+    assert _extract_error_description(response) == INSUFFICIENT_QUOTA_DESCRIPTION
+
+
+def test_photo_owner_can_delete_photo_comments_and_uploaded_file():
+    with TestClient(app) as client:
+        client.post(
+            "/auth/register",
+            json={
+                "email": "owner@example.com",
+                "username": "owner",
+                "password": "correct-horse",
+            },
+        )
+        login = client.post(
+            "/auth/login",
+            json={"email": "owner@example.com", "password": "correct-horse"},
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        upload = client.post(
+            "/photos/upload",
+            headers=headers,
+            data={"latitude": "48.8584", "longitude": "2.2945"},
+            files={"image": ("delete.jpg", b"fake-jpeg-for-delete-test", "image/jpeg")},
+        )
+        photo = upload.json()
+        uploaded_file = settings.UPLOAD_DIR / Path(photo["image_url"]).name
+        client.post(
+            f"/photos/{photo['id']}/comments",
+            headers=headers,
+            json={"content": "Delete this comment too"},
+        )
+
+        delete = client.delete(f"/photos/{photo['id']}", headers=headers)
+
+        assert delete.status_code == 204
+        assert not uploaded_file.exists()
+        assert client.get(f"/photos/{photo['id']}/comments").status_code == 404
+
+
+def test_user_cannot_delete_another_users_photo():
+    with TestClient(app) as client:
+        client.post(
+            "/auth/register",
+            json={
+                "email": "first@example.com",
+                "username": "first",
+                "password": "correct-horse",
+            },
+        )
+        owner_login = client.post(
+            "/auth/login",
+            json={"email": "first@example.com", "password": "correct-horse"},
+        )
+        owner_headers = {"Authorization": f"Bearer {owner_login.json()['access_token']}"}
+        upload = client.post(
+            "/photos/upload",
+            headers=owner_headers,
+            data={"latitude": "48.8584", "longitude": "2.2945"},
+            files={"image": ("keep.jpg", b"fake-jpeg-for-owner-test", "image/jpeg")},
+        )
+        photo = upload.json()
+        uploaded_file = settings.UPLOAD_DIR / Path(photo["image_url"]).name
+        client.post(
+            "/auth/register",
+            json={
+                "email": "second@example.com",
+                "username": "second",
+                "password": "correct-horse",
+            },
+        )
+        other_login = client.post(
+            "/auth/login",
+            json={"email": "second@example.com", "password": "correct-horse"},
+        )
+        other_headers = {"Authorization": f"Bearer {other_login.json()['access_token']}"}
+
+        delete = client.delete(f"/photos/{photo['id']}", headers=other_headers)
+
+        assert delete.status_code == 403
+        assert uploaded_file.exists()
+        uploaded_file.unlink()

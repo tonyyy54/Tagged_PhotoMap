@@ -25,6 +25,10 @@ export async function getPhotos(bounds?: PhotoBounds): Promise<Photo[]> {
   return response.data;
 }
 
+export async function deletePhoto(photoId: number): Promise<void> {
+  await apiClient.delete(`/photos/${photoId}`);
+}
+
 export function getPhotoImageUrl(photo: Photo): string {
   return photo.image_url.startsWith("http")
     ? photo.image_url

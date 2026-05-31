@@ -10,8 +10,8 @@ import "leaflet/dist/leaflet.css";
 import "./MapPage.css";
 
 import { createComment, getComments, type Comment } from "../api/commentApi";
-import { getPhotoImageUrl, getPhotos, type Photo, type PhotoBounds } from "../api/photoApi";
-import { clearAccessToken } from "../auth";
+import { deletePhoto, getPhotoImageUrl, getPhotos, type Photo, type PhotoBounds } from "../api/photoApi";
+import { clearAccessToken, getCurrentUserId } from "../auth";
 
 delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -42,12 +42,14 @@ function ViewportLoader({ onBoundsChange }: { onBoundsChange: (bounds: PhotoBoun
   return null;
 }
 
-function PhotoPopup({ photo }: { photo: Photo }) {
+function PhotoPopup({ photo, onDeleted }: { photo: Photo; onDeleted: (photoId: number) => void }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const isOwner = getCurrentUserId() === photo.user_id;
 
   useEffect(() => {
     let active = true;
@@ -78,15 +80,38 @@ function PhotoPopup({ photo }: { photo: Photo }) {
     }
   }
 
+  async function handleDelete() {
+    if (!window.confirm("Delete this photo and its comments?")) return;
+
+    setDeleting(true);
+    setError("");
+    try {
+      await deletePhoto(photo.id);
+      onDeleted(photo.id);
+    } catch {
+      setError("Could not delete this photo.");
+      setDeleting(false);
+    }
+  }
+
   return (
     <article className="photo-popup">
       <img src={getPhotoImageUrl(photo)} alt={photo.description || "Uploaded location"} />
       <div className="photo-popup__body">
         <h2>{photo.description || "Tagged photo"}</h2>
-        {photo.ai_description && <p className="photo-popup__ai">{photo.ai_description}</p>}
+        {photo.ai_description && (
+          <p className="photo-popup__ai">
+            <strong>AI description:</strong> {photo.ai_description}
+          </p>
+        )}
         <p className="photo-popup__coordinates">
           {photo.latitude.toFixed(4)}, {photo.longitude.toFixed(4)}
         </p>
+        {isOwner && (
+          <button className="delete-photo" disabled={deleting} onClick={handleDelete} type="button">
+            {deleting ? "Deleting..." : "Delete photo"}
+          </button>
+        )}
 
         <section className="comments">
           <h3>Comments</h3>
@@ -131,6 +156,10 @@ function MapPage() {
     }
   }, []);
 
+  const removePhoto = useCallback((photoId: number) => {
+    setPhotos((current) => current.filter((photo) => photo.id !== photoId));
+  }, []);
+
   function logout() {
     clearAccessToken();
     navigate("/login");
@@ -160,7 +189,7 @@ function MapPage() {
         {photos.map((photo) => (
           <Marker key={photo.id} position={[photo.latitude, photo.longitude]}>
             <Popup maxWidth={320} minWidth={280}>
-              <PhotoPopup photo={photo} />
+              <PhotoPopup photo={photo} onDeleted={removePhoto} />
             </Popup>
           </Marker>
         ))}

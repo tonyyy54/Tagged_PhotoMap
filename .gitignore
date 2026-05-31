@@ -3,6 +3,13 @@ __pycache__/
 .pytest_cache/
 .venv/
 node_modules/
-backend/.env
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Local runtime data
 backend/tagged_photos.db
 backend/uploads/

@@ -13,3 +13,16 @@ export function hasValidAccessToken(): boolean {
     return false;
   }
 }
+
+export function getCurrentUserId(): number | null {
+  const token = localStorage.getItem("access_token");
+  if (!token) return null;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const userId = Number(payload.sub);
+    return Number.isInteger(userId) ? userId : null;
+  } catch {
+    return null;
+  }
+}

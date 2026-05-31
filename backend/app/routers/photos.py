@@ -7,9 +7,11 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.database import get_session
 from app.core.security import get_current_user
+from app.models.comments import Comment
 from app.models.photo import Photo
 from app.models.user import User
 from app.schemas.photo import PhotoCreate, PhotoRead
+from app.services.ai_description_service import generate_ai_description
 from app.services.exif_service import extract_gps_coordinates
 
 router = APIRouter(prefix="/photos", tags=["Photos"])
@@ -61,6 +63,7 @@ async def upload_photo(
     suffix = suffix if suffix in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
     filename = f"{uuid4().hex}{suffix}"
     (settings.UPLOAD_DIR / filename).write_bytes(content)
+    ai_description = await generate_ai_description(content, image.content_type)
 
     photo = Photo(
         user_id=current_user.id,
@@ -68,6 +71,7 @@ async def upload_photo(
         latitude=latitude,
         longitude=longitude,
         description=description,
+        ai_description=ai_description,
     )
     session.add(photo)
     session.commit()
@@ -95,3 +99,25 @@ def get_photos(
     if max_lng is not None:
         statement = statement.where(Photo.longitude <= max_lng)
     return session.exec(statement.limit(limit)).all()
+
+
+@router.delete("/{photo_id}", status_code=204)
+def delete_photo(
+    photo_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    photo = session.get(Photo, photo_id)
+    if photo is None:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    if photo.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own photos")
+
+    comments = session.exec(select(Comment).where(Comment.photo_id == photo_id)).all()
+    for comment in comments:
+        session.delete(comment)
+    session.delete(photo)
+    session.commit()
+
+    if photo.image_url.startswith("/uploads/"):
+        (settings.UPLOAD_DIR / Path(photo.image_url).name).unlink(missing_ok=True)

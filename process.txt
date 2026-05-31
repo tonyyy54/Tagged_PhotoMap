@@ -131,6 +131,17 @@ frontend 在 UploadPage.tsx (line 15) 中使用 exifr。选择图片后会自动
 在 client.ts (line 20) 中，如果受保护 API 返回 401，会自动清除 token 并返回登录页。
 验证结果
 
+
+
+获取 OpenAI API Key 的步骤：
+
+打开 OpenAI API Key 页面。
+登录或注册 OpenAI Platform 账号。
+点击 Create new secret key。
+给 Key 起一个名称，例如 hylight-local。
+创建后立刻复制并妥善保存。完整 Key 只会显示一次。
+
+
 Phase 5 - Large Dataset Optimization
 
 Phase 6 - Deployment

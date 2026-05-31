@@ -110,11 +110,27 @@ cd backend
 python -m venv .venv (only the firt time to create the env)
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt (only the firt time to download the requirements)
-python -m uvicorn main:app --reload
+python -m uvicorn main:app --reload (start the AI below firstly)
 ```
 
 The API documentation is available at `http://127.0.0.1:8000/docs`.
 SQLite and local file uploads are used by default.
+
+
+### Enable AI photo descriptions
+
+Copy `backend/.env.example` to `backend/.env`, then set `OPENAI_API_KEY`.
+Uploaded photos will receive a short AI-generated description when the key is
+configured. Uploads still succeed if the AI service is unavailable.
+
+```powershell
+Copy-Item .env.example .env
+# Edit .env and replace OPENAI_API_KEY with your key.
+python -m uvicorn main:app --reload
+```
+
+The default vision-capable model is `gpt-5.4-mini`. Override `OPENAI_MODEL` in
+`.env` when needed.
 
 ### API endpoints
 

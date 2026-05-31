@@ -135,6 +135,22 @@
   padding: 7px 10px;
 }
 
+.photo-popup .delete-photo {
+  background: #dc2626;
+  border: 0;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 5px;
+  padding: 7px 10px;
+}
+
+.photo-popup .delete-photo:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .comments button:disabled {
   cursor: wait;
   opacity: 0.6;
